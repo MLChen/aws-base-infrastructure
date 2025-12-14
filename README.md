@@ -80,9 +80,6 @@ import {
 ## 檔案結構
 
 ```
-├── bootstrap/          # State 儲存設定（S3 + DynamoDB）
-├── legacy/             # 舊版本備份
-├── pending/            # 待處理資源
 ├── vpc.tf              # VPC 定義
 ├── subnets.tf          # 子網路
 ├── gateway.tf          # Internet Gateway + NAT Instance
