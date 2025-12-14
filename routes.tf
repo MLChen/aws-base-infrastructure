@@ -8,11 +8,6 @@
 resource "aws_route_table" "private" {
   vpc_id = aws_vpc.main.id
 
-  route {
-    cidr_block                = var.utility_cidr_block.main
-    vpc_peering_connection_id = aws_vpc_peering_connection.utility.id
-  }
-
   tags = {
     Name = "${var.proj_name.main}-${var.env_name.main}-Private-Route"
   }
@@ -21,8 +16,6 @@ resource "aws_route_table" "private" {
 resource "aws_main_route_table_association" "main" {
   vpc_id         = aws_vpc.main.id
   route_table_id = aws_route_table.private.id
-
-  depends_on = [aws_route_table.private]
 }
 
 ################################
@@ -30,11 +23,6 @@ resource "aws_main_route_table_association" "main" {
 ################################
 resource "aws_route_table" "public" {
   vpc_id = aws_vpc.main.id
-
-  route {
-    cidr_block                = var.utility_cidr_block.main
-    vpc_peering_connection_id = aws_vpc_peering_connection.utility.id
-  }
 
   tags = {
     Name = "${var.proj_name.main}-${var.env_name.main}-Public-Route"
@@ -62,11 +50,6 @@ resource "aws_route_table_association" "public-3" {
 resource "aws_route_table" "utility-private" {
   vpc_id = aws_vpc.utility.id
 
-  route {
-    cidr_block                = var.cidr_block.main
-    vpc_peering_connection_id = aws_vpc_peering_connection.utility.id
-  }
-
   tags = {
     Name = "${var.utility.main}-${var.env_name.main}-Private-Route"
   }
@@ -75,8 +58,6 @@ resource "aws_route_table" "utility-private" {
 resource "aws_main_route_table_association" "utility" {
   vpc_id         = aws_vpc.utility.id
   route_table_id = aws_route_table.utility-private.id
-
-  depends_on = [aws_route_table.utility-private]
 }
 
 ###################################
@@ -84,11 +65,6 @@ resource "aws_main_route_table_association" "utility" {
 ###################################
 resource "aws_route_table" "utility-public" {
   vpc_id = aws_vpc.utility.id
-
-  route {
-    cidr_block                = var.cidr_block.main
-    vpc_peering_connection_id = aws_vpc_peering_connection.utility.id
-  }
 
   tags = {
     Name = "${var.utility.main}-${var.env_name.main}-Public-Route"
@@ -108,6 +84,38 @@ resource "aws_route_table_association" "utility-public-2" {
 resource "aws_route_table_association" "utility-public-3" {
   subnet_id      = aws_subnet.utility-public-3.id
   route_table_id = aws_route_table.utility-public.id
+}
+
+##################
+# Peering Routes #
+##################
+
+# Main VPC Private → Utility VPC (via Peering)
+resource "aws_route" "main-private-peering" {
+  route_table_id            = aws_route_table.private.id
+  destination_cidr_block    = var.utility_cidr_block.main
+  vpc_peering_connection_id = aws_vpc_peering_connection.utility.id
+}
+
+# Main VPC Public → Utility VPC (via Peering)
+resource "aws_route" "main-public-peering" {
+  route_table_id            = aws_route_table.public.id
+  destination_cidr_block    = var.utility_cidr_block.main
+  vpc_peering_connection_id = aws_vpc_peering_connection.utility.id
+}
+
+# Utility VPC Private → Main VPC (via Peering)
+resource "aws_route" "utility-private-peering" {
+  route_table_id            = aws_route_table.utility-private.id
+  destination_cidr_block    = var.cidr_block.main
+  vpc_peering_connection_id = aws_vpc_peering_connection.utility.id
+}
+
+# Utility VPC Public → Main VPC (via Peering)
+resource "aws_route" "utility-public-peering" {
+  route_table_id            = aws_route_table.utility-public.id
+  destination_cidr_block    = var.cidr_block.main
+  vpc_peering_connection_id = aws_vpc_peering_connection.utility.id
 }
 
 ####################

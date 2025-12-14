@@ -492,3 +492,24 @@ import {
   to = aws_sns_topic.majord-shop
   id = "arn:aws:sns:us-east-1:210293595025:MajorD-Shop"
 }
+
+# ========== VPC Peering Routes ==========
+import {
+  to = aws_route.main-private-peering
+  id = "rtb-c8fc1bae_10.4.0.0/16"
+}
+
+import {
+  to = aws_route.main-public-peering
+  id = "rtb-55fc1b33_10.4.0.0/16"
+}
+
+import {
+  to = aws_route.utility-private-peering
+  id = "rtb-4afc1b2c_10.5.0.0/16"
+}
+
+import {
+  to = aws_route.utility-public-peering
+  id = "rtb-4bfc1b2d_10.5.0.0/16"
+}
