@@ -1,0 +1,74 @@
+variable "aws_region" {
+    default = "us-east-1"
+}
+
+# Project Name
+variable "proj_name" {
+    default = {
+        main = "Project-Name"
+        lowercase = "project-name"
+    }
+}
+
+# Project ENV
+variable "env_name" {
+    default = {
+        main = "Production"
+        lowercase = "production"
+    }
+}
+
+# Utility VPC
+variable "utility" {
+  default = {
+    main = "Project-Utility"
+    account = "AWS_Account_Number"
+  }
+}
+
+variable "cidr_block" {
+    default = {
+        main = "10.x.0.0/16"
+        public_1 = "10.x.10.0/24"
+        public_2 = "10.x.11.0/24"
+        public_3 = "10.x.12.0/24"
+        private_1 = "10.x.20.0/24"
+        private_2 = "10.x.21.0/24"
+        private_3 = "10.x.22.0/24"
+        rds_1 = "10.x.30.0/24"
+        rds_2 = "10.x.31.0/24"
+        rds_3 = "10.x.32.0/24"
+    }
+}
+
+variable "utility_cidr_block" {
+    default = {
+        main = "10.x.0.0/16"
+        public_1 = "10.x.10.0/24"
+        public_2 = "10.x.11.0/24"
+        public_3 = "10.x.12.0/24"
+        private_1 = "10.x.20.0/24"
+        private_2 = "10.x.21.0/24"
+        private_3 = "10.x.22.0/24"
+        rds_1 = "10.x.30.0/24"
+        rds_2 = "10.x.31.0/24"
+        rds_3 = "10.x.32.0/24"
+    }
+}
+
+variable "admin_cidr_block" {
+    default = {
+        company = "Ecowork"
+        company_cidr = ""
+    }
+}
+
+variable "availability_zone_1" {
+    default = "us-east-1b"
+}
+variable "availability_zone_2" {
+    default = "us-east-1c"
+}
+variable "availability_zone_3" {
+    default = "us-east-1d"
+}
