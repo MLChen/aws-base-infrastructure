@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-AWS 基礎建設 Terraform 專案（us-east-1），管理 MLChen 帳號的雙 VPC 網路架構和相關資源。此專案從 2016 年的 HCL 1 語法現代化而來，使用 Terraform 1.5+ import blocks 匯入現有 AWS 資源。
+AWS 基礎建設 Terraform 專案（us-east-1），管理雙 VPC 網路架構和相關資源。使用 Terraform 1.5+ 並採用 `for_each` 動態資源管理模式，所有資源可透過 `terraform.tfvars` 設定。
 
 ## Commands
 
@@ -21,9 +21,24 @@ terraform apply
 # 查看 state
 terraform state list
 terraform state show <resource>
+
+# 查看輸出（含 sensitive）
+terraform output
+terraform output -json s3_app_secret_keys
 ```
 
 **注意**：此專案使用 AWS CLI 的 credential chain（~/.aws/config + credentials），無需手動指定 AWS_PROFILE。
+
+## Configuration
+
+- `terraform.tfvars` - 實際設定值（gitignored，不提交）
+- `terraform.tfvars.sample` - 設定範本（提交至版控）
+
+新環境設定：
+```bash
+cp terraform.tfvars.sample terraform.tfvars
+vim terraform.tfvars
+```
 
 ## Architecture
 
@@ -43,39 +58,74 @@ Main VPC (10.5.0.0/16)              Utility VPC (10.4.0.0/16)
 | 入站 | Internet → ELB (Utility Public) → VPC Peering → Services (Main Private) |
 | 出站 | Services (Main Private) → NAT (Main Public) → IGW → Internet |
 
-### Internet Gateway
-- `aws_internet_gateway.main` - Main VPC 對外
-- `aws_internet_gateway.utility` - Utility VPC 對外
-
 ### NAT Instance（目前已註解）
-`gateway.tf` 和 `routes.tf` 中的 NAT 資源已註解保留。需要時取消註解並執行 `terraform apply` 即可建立 Ubuntu t3.micro NAT Instance。
+`gateway.tf` 和 `routes.tf` 中的 NAT 資源已註解保留。需要時取消註解並執行 `terraform apply`。
+
+## Resource Management Pattern
+
+所有動態資源使用 `for_each` 搭配 map 變數，新增資源只需修改 `terraform.tfvars`：
+
+### 新增 IAM User
+```hcl
+iam_users = {
+  "NewUser" = {
+    groups           = ["Admin", "Developer"]  # 群組後綴
+    managed_policies = ["arn:aws:iam::aws:policy/..."]
+    create_access_key = false
+  }
+}
+```
+
+### 新增 IAM Group
+```hcl
+iam_groups = {
+  "NewGroup" = { policy_type = "developer" }
+  # policy_type: admin|billing|developer|readonly|team|readonly-local|staff-admin|assume-any|assume-project
+}
+```
+
+### 新增 S3 Bucket
+```hcl
+s3_buckets = {
+  "my-bucket" = {
+    versioning          = true
+    block_public_access = true
+    # 可選：cors, public_read_prefix, app_user
+  }
+}
+```
+
+### 新增 Route53 / SNS / EC2 Key Pair
+```hcl
+route53_zones = { "example-com" = "example.com" }
+sns_topics    = { "alerts" = "MyProject-Alerts" }
+key_pairs     = { "main" = "my-key-name" }
+```
+
+## Naming Convention
+
+資源命名格式：`${var.proj_name.main}-${var.env_name.main}-<Resource>`
+
+- VPC: `MLChen-Production`
+- IAM Group: `MLChen-Admin`（proj_name + group key）
+- IAM Role: `MLChen-STAFF-Admin`
 
 ## File Organization
 
 | 檔案 | 內容 |
 |------|------|
 | `vpc.tf` | VPC 定義 |
-| `subnets.tf` | 子網路（每 VPC 各 9 個：3 Public + 3 Private + 3 RDS） |
+| `subnets.tf` | 子網路（每 VPC 各 9 個） |
 | `gateway.tf` | Internet Gateway + NAT Instance（已註解） |
 | `routes.tf` | Route Tables + Routes |
 | `peering.tf` | VPC Peering Connection |
 | `security_groups.tf` | Security Groups |
-| `iam.tf` | IAM Users、Groups、Roles、Policies |
-| `rds.tf` | RDS Subnet Group |
-| `route53.tf` | Hosted Zones |
-| `s3.tf` | S3 Buckets |
-| `ec2.tf` | Key Pairs |
-| `sns.tf` | SNS Topics |
+| `iam.tf` | IAM Users、Groups、Roles、Policies（for_each） |
+| `s3.tf` | S3 Buckets（for_each） |
+| `route53.tf` | Hosted Zones（for_each） |
+| `sns.tf` | SNS Topics（for_each） |
+| `ec2.tf` | Key Pairs（for_each） |
 | `imports.tf` | 現有資源 Import 宣告 |
-
-## Naming Convention
-
-資源命名格式：`${var.proj_name.main}-${var.env_name.main}-<Resource>`
-
-範例：
-- VPC: `MLChen-Production`
-- Subnet: `MLChen-Production-Public-1`
-- Security Group: `MLChen-Production-NAT`
 
 ## Import Existing Resources
 
@@ -84,8 +134,8 @@ Main VPC (10.5.0.0/16)              Utility VPC (10.4.0.0/16)
 ```hcl
 # imports.tf
 import {
-  to = aws_vpc.main
-  id = "vpc-xxxxxxxx"
+  to = aws_s3_bucket.buckets["my-bucket"]
+  id = "my-bucket"
 }
 ```
 

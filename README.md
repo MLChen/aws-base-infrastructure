@@ -22,7 +22,7 @@ AWS 基礎建設 Terraform 專案（us-east-1），管理雙 VPC 網路架構和
 
 ```bash
 # 複製變數範本
-cp variables.tf.sample terraform.tfvars
+cp terraform.tfvars.sample terraform.tfvars
 
 # 編輯變數
 vim terraform.tfvars
