@@ -130,7 +130,7 @@ resource "aws_security_group" "web-server" {
 }
 
 # Web-Server-Public
-resource "aws_security_group" "web-server-pubilc" {
+resource "aws_security_group" "web-server-public" {
   vpc_id      = aws_vpc.main.id
   name        = "${var.proj_name.main}-${var.env_name.main}-Web-Server-Public"
   description = "Web Server Public"
