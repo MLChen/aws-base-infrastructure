@@ -2,101 +2,144 @@
 # IAM Users #
 #############
 
-resource "aws_iam_user" "mlchen" {
-  name = "MLChen"
-  tags = { Name = "MLChen" }
+resource "aws_iam_user" "users" {
+  for_each = var.iam_users
+
+  name = each.key
+  tags = { Name = each.key }
 }
 
-resource "aws_iam_user" "mlchen-qnap" {
-  name = "MLChen-QNAP"
-  tags = { Name = "MLChen-QNAP" }
+resource "aws_iam_access_key" "users" {
+  for_each = { for k, v in var.iam_users : k => v if v.create_access_key }
+
+  user = aws_iam_user.users[each.key].name
 }
 
-resource "aws_iam_user" "mlchen-route53" {
-  name = "MLChen-Route53"
-  tags = { Name = "MLChen-Route53" }
+# User -> Managed Policy Attachments
+resource "aws_iam_user_policy_attachment" "managed" {
+  for_each = {
+    for item in flatten([
+      for user_key, user in var.iam_users : [
+        for policy_arn in user.managed_policies : {
+          key        = "${user_key}-${md5(policy_arn)}"
+          user       = user_key
+          policy_arn = policy_arn
+        }
+      ]
+    ]) : item.key => item
+  }
+
+  user       = aws_iam_user.users[each.value.user].name
+  policy_arn = each.value.policy_arn
 }
 
-###########################
-# IAM User Policy Attachments #
-###########################
+# User -> Group Memberships
+resource "aws_iam_user_group_membership" "users" {
+  for_each = { for k, v in var.iam_users : k => v if length(v.groups) > 0 }
 
-resource "aws_iam_user_policy_attachment" "mlchen-account-activity" {
-  user       = aws_iam_user.mlchen.name
-  policy_arn = "arn:aws:iam::aws:policy/AWSAccountActivityAccess"
-}
-
-resource "aws_iam_user_policy_attachment" "mlchen-usage-report" {
-  user       = aws_iam_user.mlchen.name
-  policy_arn = "arn:aws:iam::aws:policy/AWSAccountUsageReportAccess"
-}
-
-resource "aws_iam_user_policy_attachment" "mlchen-route53-full-access" {
-  user       = aws_iam_user.mlchen-route53.name
-  policy_arn = "arn:aws:iam::aws:policy/AmazonRoute53FullAccess"
+  user   = aws_iam_user.users[each.key].name
+  groups = [for g in each.value.groups : aws_iam_group.groups[g].name]
 }
 
 ##############
 # IAM Groups #
 ##############
 
-resource "aws_iam_group" "mlchen-admin" {
-  name = "MLChen-Admin"
+resource "aws_iam_group" "groups" {
+  for_each = var.iam_groups
+
+  name = "${var.proj_name.main}-${each.key}"
 }
 
-resource "aws_iam_group" "mlchen-billing" {
-  name = "MLChen-Billing"
+################################
+# IAM Group Policy Attachments #
+################################
+
+# Map policy types to their ARNs
+locals {
+  group_policy_map = {
+    admin         = aws_iam_policy.admin.arn
+    billing       = aws_iam_policy.billing.arn
+    developer     = aws_iam_policy.admin.arn
+    readonly      = "arn:aws:iam::aws:policy/ReadOnlyAccess"
+    team          = aws_iam_policy.team.arn
+    readonly-local = "arn:aws:iam::aws:policy/ReadOnlyAccess"
+    staff-admin   = aws_iam_policy.admin-local.arn
+    assume-any    = aws_iam_policy.assume-anyaccount-anyrole.arn
+    assume-project = aws_iam_policy.assume-project-devrole.arn
+  }
 }
 
-resource "aws_iam_group" "mlchen-developer" {
-  name = "MLChen-Developer"
+resource "aws_iam_group_policy_attachment" "groups" {
+  for_each = var.iam_groups
+
+  group      = aws_iam_group.groups[each.key].name
+  policy_arn = local.group_policy_map[each.value.policy_type]
 }
 
-resource "aws_iam_group" "mlchen-readonly" {
-  name = "MLChen-ReadOnly"
+# Additional MFA policy for readonly-local groups
+resource "aws_iam_group_policy_attachment" "readonly-local-mfa" {
+  for_each = { for k, v in var.iam_groups : k => v if v.policy_type == "readonly-local" }
+
+  group      = aws_iam_group.groups[each.key].name
+  policy_arn = aws_iam_policy.staff-allow-mfa.arn
 }
 
-resource "aws_iam_group" "mlchen-team" {
-  name = "MLChen-Team"
+#############
+# IAM Roles #
+#############
+
+locals {
+  staff_assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Principal = {
+          AWS = "arn:aws:iam::${data.aws_caller_identity.current.account_id}:root"
+        }
+        Action = "sts:AssumeRole"
+        Condition = {
+          Bool = {
+            "aws:MultiFactorAuthPresent" = "true"
+          }
+        }
+      }
+    ]
+  })
+
+  role_policy_map = {
+    admin       = aws_iam_policy.admin.arn
+    admin-local = aws_iam_policy.admin-local.arn
+    billing     = aws_iam_policy.billing.arn
+    developer   = aws_iam_policy.admin.arn
+    readonly    = "arn:aws:iam::aws:policy/ReadOnlyAccess"
+    team        = aws_iam_policy.team.arn
+  }
 }
 
-resource "aws_iam_group" "mlchen-readonly-local" {
-  name = "MLChen-ReadOnly-Local"
+resource "aws_iam_role" "staff" {
+  for_each = var.iam_staff_roles
+
+  name               = "${var.proj_name.main}-STAFF-${each.key}"
+  assume_role_policy = local.staff_assume_role_policy
+  tags               = { Name = "${var.proj_name.main}-STAFF-${each.key}" }
 }
 
-resource "aws_iam_group" "mlchen-staff-admin" {
-  name = "MLChen-Staff-Admin"
+resource "aws_iam_role_policy_attachment" "staff" {
+  for_each = var.iam_staff_roles
+
+  role       = aws_iam_role.staff[each.key].name
+  policy_arn = local.role_policy_map[each.value.policy_type]
 }
 
-resource "aws_iam_group" "assume-anyaccount-anyrole" {
-  name = "Assume-AnyAccount-AnyRole"
-}
+################
+# IAM Policies #
+################
 
-resource "aws_iam_group" "assume-mlchen-project-devrole" {
-  name = "Assume-MLChen-Project-DevRole"
-}
-
-############################
-# IAM User Group Memberships #
-############################
-
-resource "aws_iam_user_group_membership" "mlchen-groups" {
-  user = aws_iam_user.mlchen.name
-  groups = [
-    aws_iam_group.mlchen-admin.name,
-    aws_iam_group.mlchen-staff-admin.name,
-    aws_iam_group.assume-anyaccount-anyrole.name,
-    aws_iam_group.mlchen-billing.name,
-  ]
-}
-
-##########################
-# IAM Policies (Custom)  #
-##########################
-
-resource "aws_iam_policy" "mlchen-admin-policy" {
-  name        = "MLChen-Admin-Policy"
-  description = "MLChen Admin Policy"
+resource "aws_iam_policy" "admin" {
+  name        = "${var.proj_name.main}-Admin-Policy"
+  description = "${var.proj_name.main} Admin Policy"
   policy = jsonencode({
     Version = "2012-10-17"
     Statement = [
@@ -109,9 +152,9 @@ resource "aws_iam_policy" "mlchen-admin-policy" {
   })
 }
 
-resource "aws_iam_policy" "mlchen-admin-local-policy" {
-  name        = "MLChen-Admin-Local-Policy"
-  description = "MLChen Admin Local Policy"
+resource "aws_iam_policy" "admin-local" {
+  name        = "${var.proj_name.main}-Admin-Local-Policy"
+  description = "${var.proj_name.main} Admin Local Policy"
   policy = jsonencode({
     Version = "2012-10-17"
     Statement = [
@@ -124,9 +167,9 @@ resource "aws_iam_policy" "mlchen-admin-local-policy" {
   })
 }
 
-resource "aws_iam_policy" "mlchen-billing-policy" {
-  name        = "MLChen-Billing-Policy"
-  description = "MLChen Billing Policy"
+resource "aws_iam_policy" "billing" {
+  name        = "${var.proj_name.main}-Billing-Policy"
+  description = "${var.proj_name.main} Billing Policy"
   policy = jsonencode({
     Version = "2012-10-17"
     Statement = [
@@ -139,9 +182,9 @@ resource "aws_iam_policy" "mlchen-billing-policy" {
   })
 }
 
-resource "aws_iam_policy" "mlchen-team-policy" {
-  name        = "MLChen-Team-Policy"
-  description = "MLChen Team Policy"
+resource "aws_iam_policy" "team" {
+  name        = "${var.proj_name.main}-Team-Policy"
+  description = "${var.proj_name.main} Team Policy"
   policy = jsonencode({
     Version = "2012-10-17"
     Statement = [
@@ -154,14 +197,14 @@ resource "aws_iam_policy" "mlchen-team-policy" {
   })
 }
 
-resource "aws_iam_policy" "mlchen-staff-allow-mfa-policy" {
-  name        = "MLChen-STAFF-Allow-MFA-Policy"
-  description = "MLChen STAFF Allow MFA Policy"
+resource "aws_iam_policy" "staff-allow-mfa" {
+  name        = "${var.proj_name.main}-STAFF-Allow-MFA-Policy"
+  description = "${var.proj_name.main} STAFF Allow MFA Policy"
   policy = jsonencode({
     Version = "2012-10-17"
     Statement = [
       {
-        Sid    = "Stmt1458807573000"
+        Sid    = "AllowMFAManagement"
         Effect = "Allow"
         Action = [
           "iam:CreateVirtualMFADevice",
@@ -178,9 +221,9 @@ resource "aws_iam_policy" "mlchen-staff-allow-mfa-policy" {
   })
 }
 
-resource "aws_iam_policy" "mlchen-staff-allow-assume-anyaccount-anyrole-policy" {
-  name        = "MLChen-STAFF-Allow-Assume-AnyAccount-AnyRole-Policy"
-  description = "MLChen STAFF Allow Assume AnyAccount AnyRole Policy"
+resource "aws_iam_policy" "assume-anyaccount-anyrole" {
+  name        = "${var.proj_name.main}-STAFF-Allow-Assume-AnyAccount-AnyRole-Policy"
+  description = "${var.proj_name.main} STAFF Allow Assume AnyAccount AnyRole Policy"
   policy = jsonencode({
     Version = "2012-10-17"
     Statement = [
@@ -193,14 +236,14 @@ resource "aws_iam_policy" "mlchen-staff-allow-assume-anyaccount-anyrole-policy" 
   })
 }
 
-resource "aws_iam_policy" "mlchen-staff-allow-assume-mlchen-project-devrole-policy" {
-  name        = "MLChen-STAFF-Allow-Assume-MLChen-Project-DevRole-Policy"
-  description = "MLChen STAFF Allow Assume MLChen Project DevRole Policy"
+resource "aws_iam_policy" "assume-project-devrole" {
+  name        = "${var.proj_name.main}-STAFF-Allow-Assume-${var.proj_name.main}-Project-DevRole-Policy"
+  description = "${var.proj_name.main} STAFF Allow Assume ${var.proj_name.main} Project DevRole Policy"
   policy = jsonencode({
     Version = "2012-10-17"
     Statement = [
       {
-        Sid      = "Stmt1458817050225"
+        Sid      = "AllowAssumeDevRole"
         Action   = ["sts:AssumeRole"]
         Effect   = "Allow"
         Resource = ["arn:aws:iam::*"]
@@ -209,150 +252,45 @@ resource "aws_iam_policy" "mlchen-staff-allow-assume-mlchen-project-devrole-poli
   })
 }
 
-################################
-# IAM Group Policy Attachments #
-################################
+#################################
+# S3 Bucket App User (from s3_buckets variable) #
+#################################
 
-resource "aws_iam_group_policy_attachment" "mlchen-admin-policy" {
-  group      = aws_iam_group.mlchen-admin.name
-  policy_arn = aws_iam_policy.mlchen-admin-policy.arn
+# Create IAM users for S3 bucket apps
+resource "aws_iam_user" "s3_app" {
+  for_each = { for k, v in var.s3_buckets : k => v.app_user if v.app_user != null }
+
+  name = each.value.name
+  tags = { Name = each.value.name }
 }
 
-resource "aws_iam_group_policy_attachment" "mlchen-billing-policy" {
-  group      = aws_iam_group.mlchen-billing.name
-  policy_arn = aws_iam_policy.mlchen-billing-policy.arn
+resource "aws_iam_access_key" "s3_app" {
+  for_each = { for k, v in var.s3_buckets : k => v.app_user if try(v.app_user.create_access_key, false) }
+
+  user = aws_iam_user.s3_app[each.key].name
 }
 
-resource "aws_iam_group_policy_attachment" "mlchen-developer-policy" {
-  group      = aws_iam_group.mlchen-developer.name
-  policy_arn = aws_iam_policy.mlchen-admin-policy.arn
-}
+resource "aws_iam_policy" "s3_app" {
+  for_each = { for k, v in var.s3_buckets : k => v if v.app_user != null }
 
-resource "aws_iam_group_policy_attachment" "mlchen-readonly-policy" {
-  group      = aws_iam_group.mlchen-readonly.name
-  policy_arn = "arn:aws:iam::aws:policy/ReadOnlyAccess"
-}
-
-resource "aws_iam_group_policy_attachment" "mlchen-team-policy" {
-  group      = aws_iam_group.mlchen-team.name
-  policy_arn = aws_iam_policy.mlchen-team-policy.arn
-}
-
-resource "aws_iam_group_policy_attachment" "mlchen-readonly-local-mfa" {
-  group      = aws_iam_group.mlchen-readonly-local.name
-  policy_arn = aws_iam_policy.mlchen-staff-allow-mfa-policy.arn
-}
-
-resource "aws_iam_group_policy_attachment" "mlchen-readonly-local-readonly" {
-  group      = aws_iam_group.mlchen-readonly-local.name
-  policy_arn = "arn:aws:iam::aws:policy/ReadOnlyAccess"
-}
-
-resource "aws_iam_group_policy_attachment" "mlchen-staff-admin-policy" {
-  group      = aws_iam_group.mlchen-staff-admin.name
-  policy_arn = aws_iam_policy.mlchen-admin-local-policy.arn
-}
-
-resource "aws_iam_group_policy_attachment" "assume-anyaccount-anyrole-policy" {
-  group      = aws_iam_group.assume-anyaccount-anyrole.name
-  policy_arn = aws_iam_policy.mlchen-staff-allow-assume-anyaccount-anyrole-policy.arn
-}
-
-resource "aws_iam_group_policy_attachment" "assume-mlchen-project-devrole-policy" {
-  group      = aws_iam_group.assume-mlchen-project-devrole.name
-  policy_arn = aws_iam_policy.mlchen-staff-allow-assume-mlchen-project-devrole-policy.arn
-}
-
-#############
-# IAM Roles #
-#############
-
-locals {
-  staff_assume_role_policy = jsonencode({
+  name        = coalesce(each.value.app_user.policy_name, "${each.value.app_user.name}-S3-Policy")
+  description = coalesce(each.value.app_user.policy_description, "${each.value.app_user.name} S3 minimal access policy")
+  policy = jsonencode({
     Version = "2012-10-17"
     Statement = [
       {
-        Effect = "Allow"
-        Principal = {
-          AWS = "arn:aws:iam::210293595025:root"
-        }
-        Action = "sts:AssumeRole"
-        Condition = {
-          Bool = {
-            "aws:MultiFactorAuthPresent" = "true"
-          }
-        }
+        Sid      = "AllowBucketAccess"
+        Effect   = "Allow"
+        Action   = each.value.app_user.allowed_actions
+        Resource = "arn:aws:s3:::${each.key}/${each.value.app_user.allowed_prefix}/*"
       }
     ]
   })
 }
 
-resource "aws_iam_role" "mlchen-staff-admin" {
-  name               = "MLChen-STAFF-Admin"
-  assume_role_policy = local.staff_assume_role_policy
-  tags               = { Name = "MLChen-STAFF-Admin" }
-}
+resource "aws_iam_user_policy_attachment" "s3_app" {
+  for_each = { for k, v in var.s3_buckets : k => v if v.app_user != null }
 
-resource "aws_iam_role" "mlchen-staff-admin-local" {
-  name               = "MLChen-STAFF-Admin-Local"
-  assume_role_policy = local.staff_assume_role_policy
-  tags               = { Name = "MLChen-STAFF-Admin-Local" }
-}
-
-resource "aws_iam_role" "mlchen-staff-billing" {
-  name               = "MLChen-STAFF-Billing"
-  assume_role_policy = local.staff_assume_role_policy
-  tags               = { Name = "MLChen-STAFF-Billing" }
-}
-
-resource "aws_iam_role" "mlchen-staff-developer" {
-  name               = "MLChen-STAFF-Developer"
-  assume_role_policy = local.staff_assume_role_policy
-  tags               = { Name = "MLChen-STAFF-Developer" }
-}
-
-resource "aws_iam_role" "mlchen-staff-readonly" {
-  name               = "MLChen-STAFF-ReadOnly"
-  assume_role_policy = local.staff_assume_role_policy
-  tags               = { Name = "MLChen-STAFF-ReadOnly" }
-}
-
-resource "aws_iam_role" "mlchen-staff-team" {
-  name               = "MLChen-STAFF-Team"
-  assume_role_policy = local.staff_assume_role_policy
-  tags               = { Name = "MLChen-STAFF-Team" }
-}
-
-###############################
-# IAM Role Policy Attachments #
-###############################
-
-resource "aws_iam_role_policy_attachment" "mlchen-staff-admin-policy" {
-  role       = aws_iam_role.mlchen-staff-admin.name
-  policy_arn = aws_iam_policy.mlchen-admin-policy.arn
-}
-
-resource "aws_iam_role_policy_attachment" "mlchen-staff-admin-local-policy" {
-  role       = aws_iam_role.mlchen-staff-admin-local.name
-  policy_arn = aws_iam_policy.mlchen-admin-local-policy.arn
-}
-
-resource "aws_iam_role_policy_attachment" "mlchen-staff-billing-policy" {
-  role       = aws_iam_role.mlchen-staff-billing.name
-  policy_arn = aws_iam_policy.mlchen-billing-policy.arn
-}
-
-resource "aws_iam_role_policy_attachment" "mlchen-staff-developer-policy" {
-  role       = aws_iam_role.mlchen-staff-developer.name
-  policy_arn = aws_iam_policy.mlchen-admin-policy.arn
-}
-
-resource "aws_iam_role_policy_attachment" "mlchen-staff-readonly-policy" {
-  role       = aws_iam_role.mlchen-staff-readonly.name
-  policy_arn = "arn:aws:iam::aws:policy/ReadOnlyAccess"
-}
-
-resource "aws_iam_role_policy_attachment" "mlchen-staff-team-policy" {
-  role       = aws_iam_role.mlchen-staff-team.name
-  policy_arn = aws_iam_policy.mlchen-team-policy.arn
+  user       = aws_iam_user.s3_app[each.key].name
+  policy_arn = aws_iam_policy.s3_app[each.key].arn
 }

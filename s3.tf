@@ -2,32 +2,70 @@
 # S3 Buckets #
 ##############
 
-# protect-ml (us-east-1)
-resource "aws_s3_bucket" "protect-ml" {
-  bucket = "protect-ml"
+resource "aws_s3_bucket" "buckets" {
+  for_each = var.s3_buckets
+
+  bucket = each.key
 
   tags = {
-    Name = "protect-ml"
+    Name = each.key
   }
 }
 
-resource "aws_s3_bucket_versioning" "protect-ml" {
-  bucket = aws_s3_bucket.protect-ml.id
+# Versioning
+resource "aws_s3_bucket_versioning" "buckets" {
+  for_each = { for k, v in var.s3_buckets : k => v if v.versioning }
+
+  bucket = aws_s3_bucket.buckets[each.key].id
   versioning_configuration {
     status = "Enabled"
   }
 }
 
-resource "aws_s3_bucket_public_access_block" "protect-ml" {
-  bucket = aws_s3_bucket.protect-ml.id
+# Public Access Block
+resource "aws_s3_bucket_public_access_block" "buckets" {
+  for_each = var.s3_buckets
 
-  block_public_acls       = true
-  block_public_policy     = true
-  ignore_public_acls      = true
-  restrict_public_buckets = true
+  bucket = aws_s3_bucket.buckets[each.key].id
+
+  block_public_acls       = each.value.block_public_access
+  block_public_policy     = each.value.block_public_access
+  ignore_public_acls      = each.value.block_public_access
+  restrict_public_buckets = each.value.block_public_access
 }
 
-# 注意：以下 buckets 在 ap-northeast-1，不在此專案管理範圍
-# - fb.majord.tw
-# - ig.majord.tw
-# - shop.majord.tw
+# Bucket Policy for public read prefix
+resource "aws_s3_bucket_policy" "public_read" {
+  for_each = { for k, v in var.s3_buckets : k => v if v.public_read_prefix != null }
+
+  bucket = aws_s3_bucket.buckets[each.key].id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid       = "PublicRead"
+        Effect    = "Allow"
+        Principal = "*"
+        Action    = "s3:GetObject"
+        Resource  = "${aws_s3_bucket.buckets[each.key].arn}/${each.value.public_read_prefix}/*"
+      }
+    ]
+  })
+
+  depends_on = [aws_s3_bucket_public_access_block.buckets]
+}
+
+# CORS Configuration
+resource "aws_s3_bucket_cors_configuration" "buckets" {
+  for_each = { for k, v in var.s3_buckets : k => v if v.cors != null }
+
+  bucket = aws_s3_bucket.buckets[each.key].id
+
+  cors_rule {
+    allowed_headers = each.value.cors.allowed_headers
+    allowed_methods = each.value.cors.allowed_methods
+    allowed_origins = each.value.cors.allowed_origins
+    expose_headers  = each.value.cors.expose_headers
+  }
+}

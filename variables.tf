@@ -1,11 +1,13 @@
-# AWS Region
+######################
+# Basic Configuration #
+######################
+
 variable "aws_region" {
   description = "AWS region"
   type        = string
   default     = "ap-northeast-1"
 }
 
-# Project Name
 variable "proj_name" {
   description = "Project name in different cases"
   type = object({
@@ -18,7 +20,6 @@ variable "proj_name" {
   }
 }
 
-# Project Environment
 variable "env_name" {
   description = "Environment name"
   type = object({
@@ -31,7 +32,10 @@ variable "env_name" {
   }
 }
 
-# Utility VPC
+####################
+# VPC Configuration #
+####################
+
 variable "utility" {
   description = "Utility VPC configuration"
   type = object({
@@ -40,11 +44,10 @@ variable "utility" {
   })
   default = {
     main    = "Project-Utility"
-    account = "AWS_Account_Number"
+    account = "000000000000"
   }
 }
 
-# Main VPC CIDR Block
 variable "cidr_block" {
   description = "Main VPC CIDR blocks"
   type = object({
@@ -73,7 +76,6 @@ variable "cidr_block" {
   }
 }
 
-# Utility VPC CIDR Block
 variable "utility_cidr_block" {
   description = "Utility VPC CIDR blocks"
   type = object({
@@ -102,7 +104,6 @@ variable "utility_cidr_block" {
   }
 }
 
-# Admin CIDR Block
 variable "admin_cidr_block" {
   description = "Admin CIDR block for management access"
   type = object({
@@ -111,12 +112,11 @@ variable "admin_cidr_block" {
   })
   default = {
     company      = "Admin"
-    company_cidr = "0.0.0.0/32"  # 請更新為實際管理員 IP
+    company_cidr = "0.0.0.0/32"
   }
   sensitive = true
 }
 
-# Availability Zones
 variable "availability_zone_1" {
   description = "First availability zone"
   type        = string
@@ -133,5 +133,94 @@ variable "availability_zone_3" {
   description = "Third availability zone"
   type        = string
   default     = "ap-northeast-1d"
+}
+
+####################
+# IAM Configuration #
+####################
+
+variable "iam_users" {
+  description = "IAM users to create"
+  type = map(object({
+    create_access_key = optional(bool, false)
+    groups            = optional(list(string), [])
+    managed_policies  = optional(list(string), []) # AWS managed policy ARNs
+  }))
+  default = {}
+}
+
+variable "iam_groups" {
+  description = "IAM groups to create (key = group suffix, policy_type = admin|billing|developer|readonly|team|readonly-local|staff-admin|assume-any|assume-project)"
+  type = map(object({
+    policy_type = string
+  }))
+  default = {}
+}
+
+variable "iam_staff_roles" {
+  description = "IAM STAFF roles to create (assumable with MFA)"
+  type = map(object({
+    policy_type = string # admin|admin-local|billing|developer|readonly|team
+  }))
+  default = {}
+}
+
+###################
+# S3 Configuration #
+###################
+
+variable "s3_buckets" {
+  description = "S3 buckets to create"
+  type = map(object({
+    versioning          = optional(bool, false)
+    block_public_access = optional(bool, true)
+    public_read_prefix  = optional(string, null)
+    cors = optional(object({
+      allowed_origins = list(string)
+      allowed_methods = optional(list(string), ["GET"])
+      allowed_headers = optional(list(string), ["*"])
+      expose_headers  = optional(list(string), [])
+    }), null)
+    # For app-specific IAM user with bucket access
+    app_user = optional(object({
+      name               = string
+      policy_name        = optional(string, null) # Override policy name (default: {name}-S3-Policy)
+      policy_description = optional(string, null) # Override policy description
+      allowed_prefix     = string
+      allowed_actions    = optional(list(string), ["s3:GetObject", "s3:PutObject"])
+      create_access_key  = optional(bool, true)
+    }), null)
+  }))
+  default = {}
+}
+
+########################
+# Route53 Configuration #
+########################
+
+variable "route53_zones" {
+  description = "Route53 hosted zones to create (key = zone identifier, value = domain name)"
+  type        = map(string)
+  default     = {}
+}
+
+####################
+# SNS Configuration #
+####################
+
+variable "sns_topics" {
+  description = "SNS topics to create (key = topic identifier, value = topic name)"
+  type        = map(string)
+  default     = {}
+}
+
+####################
+# EC2 Configuration #
+####################
+
+variable "key_pairs" {
+  description = "EC2 key pairs to create (key = identifier, value = key name)"
+  type        = map(string)
+  default     = {}
 }
 

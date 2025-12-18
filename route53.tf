@@ -2,20 +2,12 @@
 # Route 53 Zones #
 ##################
 
-# mlchen.org
-resource "aws_route53_zone" "mlchen-org" {
-  name = "mlchen.org"
+resource "aws_route53_zone" "zones" {
+  for_each = var.route53_zones
+
+  name = each.value
 
   tags = {
-    Name = "mlchen.org"
-  }
-}
-
-# misswu.org
-resource "aws_route53_zone" "misswu-org" {
-  name = "misswu.org"
-
-  tags = {
-    Name = "misswu.org"
+    Name = each.value
   }
 }

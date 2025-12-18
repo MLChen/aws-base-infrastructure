@@ -1,0 +1,162 @@
+######################
+# Basic Configuration #
+######################
+
+aws_region = "us-east-1"
+
+proj_name = {
+  main      = "MyProject"
+  lowercase = "myproject"
+}
+
+env_name = {
+  main      = "Production"
+  lowercase = "production"
+}
+
+####################
+# VPC Configuration #
+####################
+
+utility = {
+  main    = "MyProject-Utility"
+  account = "123456789012"
+}
+
+cidr_block = {
+  main      = "10.5.0.0/16"
+  public_1  = "10.5.10.0/24"
+  public_2  = "10.5.11.0/24"
+  public_3  = "10.5.12.0/24"
+  private_1 = "10.5.20.0/24"
+  private_2 = "10.5.21.0/24"
+  private_3 = "10.5.22.0/24"
+  rds_1     = "10.5.30.0/24"
+  rds_2     = "10.5.31.0/24"
+  rds_3     = "10.5.32.0/24"
+}
+
+utility_cidr_block = {
+  main      = "10.4.0.0/16"
+  public_1  = "10.4.10.0/24"
+  public_2  = "10.4.11.0/24"
+  public_3  = "10.4.12.0/24"
+  private_1 = "10.4.20.0/24"
+  private_2 = "10.4.21.0/24"
+  private_3 = "10.4.22.0/24"
+  rds_1     = "10.4.30.0/24"
+  rds_2     = "10.4.31.0/24"
+  rds_3     = "10.4.32.0/24"
+}
+
+availability_zone_1 = "us-east-1b"
+availability_zone_2 = "us-east-1c"
+availability_zone_3 = "us-east-1d"
+
+admin_cidr_block = {
+  company      = "MyCompany"
+  company_cidr = "203.0.113.0/32" # Replace with your admin IP
+}
+
+####################
+# IAM Configuration #
+####################
+
+# IAM Users
+# - groups: list of group suffixes (will be prefixed with proj_name)
+# - managed_policies: list of AWS managed policy ARNs
+# - create_access_key: whether to create access key (default: false)
+iam_users = {
+  "AdminUser" = {
+    groups = ["Admin", "Billing"]
+    managed_policies = [
+      "arn:aws:iam::aws:policy/AWSAccountActivityAccess"
+    ]
+  }
+  "ServiceAccount" = {
+    create_access_key = true
+  }
+  "ReadOnlyUser" = {
+    groups = ["ReadOnly"]
+  }
+}
+
+# IAM Groups
+# policy_type options: admin, billing, developer, readonly, team,
+#                      readonly-local, staff-admin, assume-any, assume-project
+iam_groups = {
+  "Admin"     = { policy_type = "admin" }
+  "Billing"   = { policy_type = "billing" }
+  "Developer" = { policy_type = "developer" }
+  "ReadOnly"  = { policy_type = "readonly" }
+  "Team"      = { policy_type = "team" }
+}
+
+# IAM Staff Roles (assumable with MFA)
+# policy_type options: admin, admin-local, billing, developer, readonly, team
+iam_staff_roles = {
+  "Admin"     = { policy_type = "admin" }
+  "Developer" = { policy_type = "developer" }
+  "ReadOnly"  = { policy_type = "readonly" }
+}
+
+###################
+# S3 Configuration #
+###################
+
+# S3 Buckets
+# - versioning: enable versioning (default: false)
+# - block_public_access: block all public access (default: true)
+# - public_read_prefix: prefix to allow public read (requires block_public_access = false)
+# - cors: CORS configuration
+# - app_user: create IAM user with bucket access
+s3_buckets = {
+  "my-private-bucket" = {
+    versioning          = true
+    block_public_access = true
+  }
+  "my-app-bucket" = {
+    versioning          = false
+    block_public_access = false
+    public_read_prefix  = "public"
+    cors = {
+      allowed_origins = ["http://localhost:3000", "https://example.com"]
+      allowed_methods = ["PUT", "GET"]
+      expose_headers  = ["ETag"]
+    }
+    app_user = {
+      name              = "MyApp-S3-User"
+      allowed_prefix    = "uploads"
+      allowed_actions   = ["s3:PutObject", "s3:GetObject"]
+      create_access_key = true
+    }
+  }
+}
+
+########################
+# Route53 Configuration #
+########################
+
+# Route53 Hosted Zones (key = identifier, value = domain name)
+route53_zones = {
+  "example-com" = "example.com"
+  "example-org" = "example.org"
+}
+
+####################
+# SNS Configuration #
+####################
+
+# SNS Topics (key = identifier, value = topic name)
+sns_topics = {
+  "alerts" = "MyProject-Alerts"
+}
+
+####################
+# EC2 Configuration #
+####################
+
+# EC2 Key Pairs (key = identifier, value = key name)
+key_pairs = {
+  "main-key" = "my-ec2-key"
+}
