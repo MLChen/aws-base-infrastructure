@@ -34,9 +34,9 @@ resource "aws_s3_bucket_public_access_block" "buckets" {
   restrict_public_buckets = each.value.block_public_access
 }
 
-# Bucket Policy for public read prefix
+# Bucket Policy for public read prefixes
 resource "aws_s3_bucket_policy" "public_read" {
-  for_each = { for k, v in var.s3_buckets : k => v if v.public_read_prefix != null }
+  for_each = { for k, v in var.s3_buckets : k => v if v.public_read_prefixes != null }
 
   bucket = aws_s3_bucket.buckets[each.key].id
 
@@ -48,7 +48,7 @@ resource "aws_s3_bucket_policy" "public_read" {
         Effect    = "Allow"
         Principal = "*"
         Action    = "s3:GetObject"
-        Resource  = "${aws_s3_bucket.buckets[each.key].arn}/${each.value.public_read_prefix}/*"
+        Resource  = [for prefix in each.value.public_read_prefixes : "${aws_s3_bucket.buckets[each.key].arn}/${prefix}/*"]
       }
     ]
   })

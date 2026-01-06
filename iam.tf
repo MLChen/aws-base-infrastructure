@@ -282,7 +282,7 @@ resource "aws_iam_policy" "s3_app" {
         Sid      = "AllowBucketAccess"
         Effect   = "Allow"
         Action   = each.value.app_user.allowed_actions
-        Resource = "arn:aws:s3:::${each.key}/${each.value.app_user.allowed_prefix}/*"
+        Resource = [for prefix in each.value.app_user.allowed_prefixes : "arn:aws:s3:::${each.key}/${prefix}/*"]
       }
     ]
   })

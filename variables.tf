@@ -172,9 +172,9 @@ variable "iam_staff_roles" {
 variable "s3_buckets" {
   description = "S3 buckets to create"
   type = map(object({
-    versioning          = optional(bool, false)
-    block_public_access = optional(bool, true)
-    public_read_prefix  = optional(string, null)
+    versioning           = optional(bool, false)
+    block_public_access  = optional(bool, true)
+    public_read_prefixes = optional(list(string), null) # List of prefixes for public read
     cors = optional(object({
       allowed_origins = list(string)
       allowed_methods = optional(list(string), ["GET"])
@@ -186,7 +186,7 @@ variable "s3_buckets" {
       name               = string
       policy_name        = optional(string, null) # Override policy name (default: {name}-S3-Policy)
       policy_description = optional(string, null) # Override policy description
-      allowed_prefix     = string
+      allowed_prefixes   = list(string)           # List of prefixes (e.g., ["uploads", "archive"])
       allowed_actions    = optional(list(string), ["s3:GetObject", "s3:PutObject"])
       create_access_key  = optional(bool, true)
     }), null)

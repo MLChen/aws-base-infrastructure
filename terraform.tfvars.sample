@@ -116,9 +116,9 @@ s3_buckets = {
     block_public_access = true
   }
   "my-app-bucket" = {
-    versioning          = false
-    block_public_access = false
-    public_read_prefix  = "public"
+    versioning           = false
+    block_public_access  = false
+    public_read_prefixes = ["public"]
     cors = {
       allowed_origins = ["http://localhost:3000", "https://example.com"]
       allowed_methods = ["PUT", "GET"]
@@ -126,8 +126,8 @@ s3_buckets = {
     }
     app_user = {
       name              = "MyApp-S3-User"
-      allowed_prefix    = "uploads"
-      allowed_actions   = ["s3:PutObject", "s3:GetObject"]
+      allowed_prefixes  = ["uploads", "archive"]
+      allowed_actions   = ["s3:PutObject", "s3:GetObject", "s3:DeleteObject"]
       create_access_key = true
     }
   }
